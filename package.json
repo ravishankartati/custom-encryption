@@ -1,0 +1,25 @@
+{
+  "name": "com.ravi.customencyptplugin",
+  "version": "0.0.1",
+  "description": "Encrypt large files",
+  "cordova": {
+    "id": "com.ravi.customencyptplugin",
+    "platforms": [
+      "android"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ravishankartati/custom-encryption.git"
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-android"
+  ],
+  "author": "Ravishankar Tati",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ravishankartati/custom-encryption/issues"
+  },
+  "homepage": "https://github.com/ravishankartati/custom-encryption#readme"
+}
