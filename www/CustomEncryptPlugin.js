@@ -1,5 +1,9 @@
 var exec = require('cordova/exec');
 
-exports.coolMethod = function (arg0, success, error) {
-    exec(success, error, 'CustomEncryptPlugin', 'coolMethod', [arg0]);
+exports.coolMethod = function (secureKey, iv, value, success, error) {
+    if(secureKey && iv && value){
+        exec(success, error, 'CustomEncryptPlugin', 'ENCRYPT', [secureKey, iv, value]);
+    } else {
+        success('');
+    }
 };
