@@ -1,5 +1,8 @@
 package com.ravi.customencyptplugin;
 
+import android.content.Context;
+import android.os.Environment;
+
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
 
@@ -13,6 +16,8 @@ import java.util.Random;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -21,8 +26,6 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
-
-import org.apache.commons.codec.binary.Hex;
 
 /**
  * This class echoes a string called from JavaScript.
@@ -45,11 +48,17 @@ public class CustomEncryptPlugin extends CordovaPlugin {
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-        if (action.equals("ENCRYPT")) {
-            String secureKey = args.getString(0);
-            String iv = args.getString(1);
-            String value = args.getString(2);
-            callbackContext.success(encrypt(secureKey, value, iv));
+
+        try {
+            if (action.equals("ENCRYPT")) {
+                String secureKey = args.getString(0);
+                String iv = args.getString(1);
+                String value = args.getString(2);
+                callbackContext.success(encrypt(secureKey, value, iv));
+            }
+        } catch (Exception e) {
+            System.out.println("Error occurred while performing " + action + " : " + e.getMessage());
+            callbackContext.error("Error occurred while performing " + action);
         }
         return false;
     }
@@ -86,26 +95,39 @@ public class CustomEncryptPlugin extends CordovaPlugin {
      * @throws Exception
      */
 
-    private String encryptUsingFileStream(SecretKeySpec secretKeySpec, IvParameterSpec ivParameterSpec,
-            String fileURL) {
+    private String encryptUsingFileStream(SecretKeySpec secretKeySpec, IvParameterSpec ivParameterSpec, String fileURL) {
         int read;
-        File inputFile = new File(fileUrl); // file to encrypted.
-        File encryptedFile = new File("file:///storage/emulated/0/Download/" + inputFile.getName()); // write encrypted
+        File dirPath = Environment.getExternalStoragePublicDirectory("Download");
+
+        File inputFile = new File(dirPath,"IntroToCrypto.pdf"); // file to encrypted.
+        File encryptedFile = new File(dirPath , inputFile.getName() + ".enc" ); // write encrypted
                                                                                                      // data to this
                                                                                                      // file.
-        if (!encryptedFile.exists())
-            encryptedFile.createNewFile();
-        FileInputStream fileInpStream = new FileInputStream(inputFile);
-        FileOutputStream fileOpStream = new FileOutputStream(encryptedFile);
-        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
-        cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec);
-        CipherInputStream cipherInpStream = new CipherInputStream(fileInpStream, cipher);
-        while ((read = cipherInpStream.read()) != -1) {
-            fileOpStream.write((char) read);
-            fileOpStream.flush();
+        try {
+            try {
+                if (!encryptedFile.exists())
+                    encryptedFile.createNewFile();
+            } catch (Exception e) {
+                File f = Environment.getExternalStoragePublicDirectory("Download");
+                return 	 encryptedFile.getPath()+" "+encryptedFile.isDirectory()+" "+e.getMessage();
+            }            
+            FileInputStream fileInpStream = new FileInputStream(inputFile.getPath());
+            FileOutputStream fileOpStream = new FileOutputStream(encryptedFile);
+            Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
+            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec);
+            CipherInputStream cipherInpStream = new CipherInputStream(fileInpStream, cipher);
+            while ((read = cipherInpStream.read()) != -1) {
+                fileOpStream.write((char) read);
+                fileOpStream.flush();
+            }
+            fileOpStream.close();
+            return encryptedFile.getAbsolutePath();
+        } catch (IOException e) {
+            return inputFile.toString();
+        } catch (GeneralSecurityException e) {
+            return e.getMessage();
         }
-        fileOpStream.close();
-        return encryptedFile.getAbsolutePath();
+
     }
 
     /**
@@ -134,7 +156,7 @@ public class CustomEncryptPlugin extends CordovaPlugin {
     private static String generateSecureKey(String password) throws Exception {
         byte[] secureKeyInBytes = generatePBKDF2(password.toCharArray(), generateRandomSalt(), PBKDF2_ITERATION_COUNT,
                 SECURE_KEY_LENGTH);
-        return Hex.encodeHexString(secureKeyInBytes);
+        return bytesToHexString(secureKeyInBytes);
     }
 
     /**
@@ -147,7 +169,7 @@ public class CustomEncryptPlugin extends CordovaPlugin {
     private static String generateSecureIV(String password) throws Exception {
         byte[] secureIVInBytes = generatePBKDF2(password.toCharArray(), generateRandomSalt(), PBKDF2_ITERATION_COUNT,
                 SECURE_IV_LENGTH);
-        return Hex.encodeHexString(secureIVInBytes);
+        return bytesToHexString(secureIVInBytes);
     }
 
     /**
@@ -159,5 +181,13 @@ public class CustomEncryptPlugin extends CordovaPlugin {
         byte[] salt = new byte[16];
         RANDOM.nextBytes(salt);
         return salt;
+    }
+
+    public static String bytesToHexString(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
     }
 }
