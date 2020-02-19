@@ -1,18 +1,2 @@
-<?xml version="1.0" encoding="utf-8" ?>
-<plugin id="com.ravi.customencyptplugin" version="0.0.1" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
-    <name>CustomEncryptPlugin</name>
-    <js-module name="CustomEncryptPlugin" src="www/CustomEncryptPlugin.js">
-        <clobbers target="cordova.plugins.CustomEncryptPlugin" />
-    </js-module>
-    <platform name="android">
-        <config-file parent="/*" target="res/xml/config.xml">
-            <feature name="CustomEncryptPlugin">
-                <param name="android-package" value="com.ravi.customencyptplugin.CustomEncryptPlugin" />
-            </feature>
-            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-        </config-file>
-        <config-file parent="/*" target="AndroidManifest.xml"></config-file>
-        <source-file src="src/android/CustomEncryptPlugin.java" target-dir="src/com/ravi/customencyptplugin/CustomEncryptPlugin" />
-    </platform>
-</plugin>
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="com.ravi.customencyptplugin" version="0.0.1" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android"><name>CustomEncryptPlugin</name><js-module name="CustomEncryptPlugin" src="www/CustomEncryptPlugin.js"><clobbers target="cordova.plugins.CustomEncryptPlugin" /></js-module><platform name="android"><config-file parent="/*" target="res/xml/config.xml"><feature name="CustomEncryptPlugin"><param name="android-package" value="com.ravi.customencyptplugin.CustomEncryptPlugin" /></feature></config-file><config-file parent="/*" target="AndroidManifest.xml"></config-file><source-file src="src/android/CustomEncryptPlugin.java" target-dir="src/com/ravi/customencyptplugin/CustomEncryptPlugin" /></platform></plugin>
