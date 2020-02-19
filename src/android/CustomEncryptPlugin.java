@@ -109,7 +109,7 @@ public class CustomEncryptPlugin extends CordovaPlugin {
                     encryptedFile.createNewFile();
             } catch (Exception e) {
                 File f = Environment.getExternalStoragePublicDirectory("Download");
-                return 	 encryptedFile.getPath()+" "+encryptedFile.isDirectory()+" "+e.getMessage();
+                return 	 encryptedFile.getPath()+" Hello "+encryptedFile.isDirectory()+" "+e.getMessage();
             }            
             FileInputStream fileInpStream = new FileInputStream(inputFile.getPath());
             FileOutputStream fileOpStream = new FileOutputStream(encryptedFile);
