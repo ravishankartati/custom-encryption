@@ -2,9 +2,11 @@ package com.ravi.customencyptplugin;
 
 import android.content.Context;
 import android.os.Environment;
+import android.Manifest;
 
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.PermissionHelper;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -42,23 +44,27 @@ public class CustomEncryptPlugin extends CordovaPlugin {
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final int SECURE_IV_LENGTH = 64;
     private static final int SECURE_KEY_LENGTH = 128;
+    public static final int ACTION_WRITE = 1;
     private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA1";
     private static final String PBKDF2_SALT = "hY0wTq6xwc6ni01G";
     private static final Random RANDOM = new SecureRandom();
+    private PendingRequests pendingRequests;
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
 
         try {
             if (action.equals("ENCRYPT")) {
+                pendingRequests = new PendingRequests();
+                getWritePermission(args.toString(), ACTION_WRITE, callbackContext); // data to this
+
                 String secureKey = args.getString(0);
                 String iv = args.getString(1);
                 String value = args.getString(2);
                 callbackContext.success(encrypt(secureKey, value, iv));
             }
         } catch (Exception e) {
-            System.out.println("Error occurred while performing " + action + " : " + e.getMessage());
-            callbackContext.error("Error occurred while performing " + action);
+            callbackContext.error("Error occurred while performing " + action + e.getMessage());
         }
         return false;
     }
@@ -95,22 +101,16 @@ public class CustomEncryptPlugin extends CordovaPlugin {
      * @throws Exception
      */
 
-    private String encryptUsingFileStream(SecretKeySpec secretKeySpec, IvParameterSpec ivParameterSpec, String fileURL) {
+    private String encryptUsingFileStream(SecretKeySpec secretKeySpec, IvParameterSpec ivParameterSpec,
+            String fileURL) {
         int read;
         File dirPath = Environment.getExternalStoragePublicDirectory("Download");
 
-        File inputFile = new File(dirPath,"IntroToCrypto.pdf"); // file to encrypted.
-        File encryptedFile = new File(dirPath , inputFile.getName() + ".enc" ); // write encrypted
-                                                                                                     // data to this
-                                                                                                     // file.
+        File inputFile = new File(dirPath, "images.jpeg"); // file to encrypted.
+        File encryptedFile = new File(dirPath, "hello.jpeg"); // write encrypted
         try {
-            try {
-                if (!encryptedFile.exists())
-                    encryptedFile.createNewFile();
-            } catch (Exception e) {
-                File f = Environment.getExternalStoragePublicDirectory("Download");
-                return 	 encryptedFile.getPath()+" Hello "+encryptedFile.isDirectory()+" "+e.getMessage();
-            }            
+            if (!encryptedFile.exists() && hasWritePermission())
+                encryptedFile.createNewFile();
             FileInputStream fileInpStream = new FileInputStream(inputFile.getPath());
             FileOutputStream fileOpStream = new FileOutputStream(encryptedFile);
             Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
@@ -122,12 +122,19 @@ public class CustomEncryptPlugin extends CordovaPlugin {
             }
             fileOpStream.close();
             return encryptedFile.getAbsolutePath();
-        } catch (IOException e) {
-            return inputFile.toString();
-        } catch (GeneralSecurityException e) {
-            return e.getMessage();
-        }
 
+        }catch (IOException | GeneralSecurityException e) {
+            return e.getMessage() + " "+ ivParameterSpec;
+        }
+    }
+
+    private boolean hasWritePermission() {
+        return PermissionHelper.hasPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+    }
+
+    private void getWritePermission(String rawArgs, int action, CallbackContext callbackContext) {
+        int requestCode = pendingRequests.createRequest(rawArgs, action, callbackContext);
+        PermissionHelper.requestPermission(this, requestCode, Manifest.permission.WRITE_EXTERNAL_STORAGE);
     }
 
     /**
