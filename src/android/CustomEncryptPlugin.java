@@ -56,39 +56,25 @@ public class CustomEncryptPlugin extends CordovaPlugin {
         try {
             if (action.equals("ENCRYPT")) {
                 pendingRequests = new PendingRequests();
-                getWritePermission(args.toString(), ACTION_WRITE, callbackContext); // data to this
-
+                getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
                 String secureKey = args.getString(0);
                 String iv = args.getString(1);
                 String value = args.getString(2);
-                callbackContext.success(encrypt(secureKey, value, iv));
+                callbackContext.success(encryptUsingFileStream(secureKey, value, iv));
+            } else if (action.equals("DECRYPT")) {
+                pendingRequests = new PendingRequests();
+                getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
+                String secureKey = args.getString(0);
+                String iv = args.getString(1);
+                String value = args.getString(2);
+                callbackContext.success(decryptUsingFileStream(secureKey, value, iv));
             }
         } catch (Exception e) {
             callbackContext.error("Error occurred while performing " + action + e.getMessage());
         }
         return false;
     }
-
-    /**
-     * To perform the AES256 encryption
-     *
-     * @param secureKey A 32 bytes string, which will used as input key for AES256
-     *                  encryption
-     * @param fileURL   Path to the file which will be encrypted.
-     * @param iv        A 16 bytes string, which will used as initial vector for
-     *                  AES256 encryption
-     * @return AES Encrypted file URL
-     * @throws Exception
-     */
-    private String encrypt(String secureKey, String fileURL, String iv) throws Exception {
-        byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
-                PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
-        IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
-        SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
-        return encryptUsingFileStream(secretKeySpec, ivParameterSpec, fileURL);
-
-    }
-
+    
     /**
      * To perform the AES256 encryption using FileStream
      *
@@ -101,14 +87,16 @@ public class CustomEncryptPlugin extends CordovaPlugin {
      * @throws Exception
      */
 
-    private String encryptUsingFileStream(SecretKeySpec secretKeySpec, IvParameterSpec ivParameterSpec,
-            String fileURL) {
-        int read;
-        File dirPath = Environment.getExternalStoragePublicDirectory("Download");
-
-        File inputFile = new File(dirPath, "images.jpeg"); // file to encrypted.
-        File encryptedFile = new File(dirPath, "hello.jpeg"); // write encrypted
+    private String encryptUsingFileStream(String secureKey, String fileURL, String iv) {
+        byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
+                PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
+        IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
+        SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
         try {
+            int read;
+            File dirPath = Environment.getExternalStoragePublicDirectory("Download");
+            File inputFile = new File(dirPath, "nepal.mp4"); // file to encrypted.
+            File encryptedFile = new File(dirPath, "encNepal.mp4"); // write encrypted
             if (!encryptedFile.exists() && hasWritePermission())
                 encryptedFile.createNewFile();
             FileInputStream fileInpStream = new FileInputStream(inputFile.getPath());
@@ -123,8 +111,49 @@ public class CustomEncryptPlugin extends CordovaPlugin {
             fileOpStream.close();
             return encryptedFile.getAbsolutePath();
 
-        }catch (IOException | GeneralSecurityException e) {
-            return e.getMessage() + " "+ ivParameterSpec;
+        } catch (IOException | GeneralSecurityException e) {
+            return e.getMessage() + " " + ivParameterSpec;
+        }
+    }
+
+    /**
+     * To perform the AES256 decryption using FileStream
+     *
+     * @param secureKey A 32 bytes string, which will used as input key for AES256
+     *                  encryption
+     * @param fileURL   Path to the file which will be encrypted.
+     * @param iv        A 16 bytes string, which will used as initial vector for
+     *                  AES256 encryption
+     * @return File path of decrypted file.
+     * @throws Exception
+     */
+
+    private String decryptUsingFileStream(String secureKey, String fileURL, String iv) {
+        byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
+                PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
+        IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
+        SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
+        try {
+            int read;
+            File dirPath = Environment.getExternalStoragePublicDirectory("Download");
+            File encryptedFile = new File(dirPath, "encNepal.mp4");
+            File decryptedFile = new File(dirPath, "decNepal.mp4");
+            if (!decryptedFile.exists() && hasWritePermission())
+                decryptedFile.createNewFile();
+            FileInputStream encryptedFileStream = new FileInputStream(encryptedFile.getPath());
+            FileOutputStream outputFileStream = new FileOutputStream(decryptedFile);
+            Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec);
+            CipherOutputStream cipherOpStream = new CipherOutputStream(outputFileStream, cipher);
+            while ((read = encryptedFileStream.read()) != -1) {
+                cipherOpStream.write((char) read);
+                cipherOpStream.flush();
+            }
+            cipherOpStream.close();
+            return decryptedFile.getAbsolutePath();
+
+        } catch (IOException | GeneralSecurityException e) {
+            return e.getMessage() + " " + ivParameterSpec;
         }
     }
 
