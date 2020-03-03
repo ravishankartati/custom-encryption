@@ -3,6 +3,7 @@ package com.ravi.customencyptplugin;
 import android.content.Context;
 import android.os.Environment;
 import android.Manifest;
+import android.util.Log;
 
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
@@ -19,10 +20,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.security.GeneralSecurityException;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
@@ -34,6 +37,7 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class CustomEncryptPlugin extends CordovaPlugin {
 
+    private static final String LOG_TAG = "Encryption";
     private static final String ENCRYPT = "encrypt";
     private static final String DECRYPT = "decrypt";
     private static final String GENERATE_SECURE_KEY = "generateSecureKey";
@@ -52,29 +56,40 @@ public class CustomEncryptPlugin extends CordovaPlugin {
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-
         try {
-            if (action.equals("ENCRYPT")) {
-                pendingRequests = new PendingRequests();
-                getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
-                String secureKey = args.getString(0);
-                String iv = args.getString(1);
-                String value = args.getString(2);
-                callbackContext.success(encryptUsingFileStream(secureKey, value, iv));
-            } else if (action.equals("DECRYPT")) {
-                pendingRequests = new PendingRequests();
-                getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
-                String secureKey = args.getString(0);
-                String iv = args.getString(1);
-                String value = args.getString(2);
-                callbackContext.success(decryptUsingFileStream(secureKey, value, iv));
-            }
+            cordova.getThreadPool().execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (action.equals("ENCRYPT")) {
+                            pendingRequests = new PendingRequests();
+                            getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
+                            String secureKey = args.getString(0);
+                            String iv = args.getString(1);
+                            String value = args.getString(2);
+                            callbackContext.success(encryptUsingFileStream(secureKey, value, iv));
+                        } else if (action.equals("DECRYPT")) {
+                            pendingRequests = new PendingRequests();
+                            getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
+                            String secureKey = args.getString(0);
+                            String iv = args.getString(1);
+                            String value = args.getString(2);
+                            callbackContext.success(decryptUsingFileStream(secureKey, value, iv));
+                        }
+                    } catch (Exception e) {
+                        Log.d(LOG_TAG, action + e.getMessage());
+                        callbackContext.error("Error occurred while performing " + action + e.getMessage());
+                    }
+                }
+            });
         } catch (Exception e) {
-            callbackContext.error("Error occurred while performing " + action + e.getMessage());
+            Log.d(LOG_TAG, action + e.getMessage());
+            callbackContext.error("F error ");
         }
+
         return false;
     }
-    
+
     /**
      * To perform the AES256 encryption using FileStream
      *
@@ -88,15 +103,15 @@ public class CustomEncryptPlugin extends CordovaPlugin {
      */
 
     private String encryptUsingFileStream(String secureKey, String fileURL, String iv) {
-        byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
-                PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
-        IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
-        SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
         try {
+            byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
+                    PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
+            IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
+            SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
             int read;
             File dirPath = Environment.getExternalStoragePublicDirectory("Download");
-            File inputFile = new File(dirPath, "nepal.mp4"); // file to encrypted.
-            File encryptedFile = new File(dirPath, "encNepal.mp4"); // write encrypted
+            File inputFile = new File(dirPath, fileURL); // file to encrypted.
+            File encryptedFile = new File(dirPath, "enc" + fileURL); // write encrypted
             if (!encryptedFile.exists() && hasWritePermission())
                 encryptedFile.createNewFile();
             FileInputStream fileInpStream = new FileInputStream(inputFile.getPath());
@@ -111,8 +126,9 @@ public class CustomEncryptPlugin extends CordovaPlugin {
             fileOpStream.close();
             return encryptedFile.getAbsolutePath();
 
-        } catch (IOException | GeneralSecurityException e) {
-            return e.getMessage() + " " + ivParameterSpec;
+        } catch (Exception e) {
+            Log.d(LOG_TAG, e.getMessage());
+            return e.getMessage();
         }
     }
 
@@ -129,15 +145,15 @@ public class CustomEncryptPlugin extends CordovaPlugin {
      */
 
     private String decryptUsingFileStream(String secureKey, String fileURL, String iv) {
-        byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
-                PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
-        IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
-        SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
         try {
+            byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
+                    PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
+            IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
+            SecretKeySpec secretKeySpec = new SecretKeySpec(pbkdf2SecuredKey, "AES");
             int read;
             File dirPath = Environment.getExternalStoragePublicDirectory("Download");
-            File encryptedFile = new File(dirPath, "encNepal.mp4");
-            File decryptedFile = new File(dirPath, "decNepal.mp4");
+            File encryptedFile = new File(dirPath, fileURL);
+            File decryptedFile = new File(dirPath, "dec" + fileURL);
             if (!decryptedFile.exists() && hasWritePermission())
                 decryptedFile.createNewFile();
             FileInputStream encryptedFileStream = new FileInputStream(encryptedFile.getPath());
@@ -152,8 +168,9 @@ public class CustomEncryptPlugin extends CordovaPlugin {
             cipherOpStream.close();
             return decryptedFile.getAbsolutePath();
 
-        } catch (IOException | GeneralSecurityException e) {
-            return e.getMessage() + " " + ivParameterSpec;
+        } catch (Exception e) {
+            Log.d(LOG_TAG, e.getMessage());
+            return e.getMessage();
         }
     }
 
