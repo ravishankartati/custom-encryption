@@ -4,10 +4,12 @@ import android.content.Context;
 import android.os.Environment;
 import android.Manifest;
 import android.util.Log;
+import android.content.pm.PackageManager;
 
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.PermissionHelper;
+import org.apache.cordova.PluginResult;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -43,50 +45,61 @@ public class CustomEncryptPlugin extends CordovaPlugin {
     private static final String GENERATE_SECURE_KEY = "generateSecureKey";
     private static final String GENERATE_SECURE_IV = "generateSecureIV";
 
+    public static final int ENC_REQ_CODE = 0;
+    public static final int DEC_REQ_CODE = 1;
+    public static final int PERMISSION_DENIED_ERROR = 2;
+    public static final String WRITE = Manifest.permission.WRITE_EXTERNAL_STORAGE;
+
     private static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5PADDING";
     private static final int PBKDF2_ITERATION_COUNT = 1001;
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final int SECURE_IV_LENGTH = 64;
     private static final int SECURE_KEY_LENGTH = 128;
-    public static final int ACTION_WRITE = 1;
+
     private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA1";
     private static final String PBKDF2_SALT = "hY0wTq6xwc6ni01G";
     private static final Random RANDOM = new SecureRandom();
-    private PendingRequests pendingRequests;
+
+    private CallbackContext callbackContext;
+    private String secureKey;
+    private String iv;
+    private String value;
 
     @Override
-    public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-        try {
+    public boolean execute(String action, JSONArray args, CallbackContext cb) throws JSONException {
+        this.callbackContext = cb;
+        this.secureKey = args.getString(0);
+        this.iv = args.getString(1);
+        this.value = args.getString(2);
+        if (action.equals("ENCRYPT")) {
             cordova.getThreadPool().execute(new Runnable() {
                 @Override
                 public void run() {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
                     try {
-                        if (action.equals("ENCRYPT")) {
-                            pendingRequests = new PendingRequests();
-                            getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
-                            String secureKey = args.getString(0);
-                            String iv = args.getString(1);
-                            String value = args.getString(2);
-                            callbackContext.success(encryptUsingFileStream(secureKey, value, iv));
-                        } else if (action.equals("DECRYPT")) {
-                            pendingRequests = new PendingRequests();
-                            getWritePermission(args.toString(), ACTION_WRITE, callbackContext);
-                            String secureKey = args.getString(0);
-                            String iv = args.getString(1);
-                            String value = args.getString(2);
-                            callbackContext.success(decryptUsingFileStream(secureKey, value, iv));
-                        }
+                        callbackContext.success(encryptUsingFileStream(secureKey, value, iv));
                     } catch (Exception e) {
                         Log.d(LOG_TAG, action + e.getMessage());
-                        callbackContext.error("Error occurred while performing " + action + e.getMessage());
+                        callbackContext.error(action + e.getMessage());
                     }
                 }
             });
-        } catch (Exception e) {
-            Log.d(LOG_TAG, action + e.getMessage());
-            callbackContext.error("F error ");
+            return true;
+        } else if (action.equals("DECRYPT")) {
+            cordova.getThreadPool().execute(new Runnable() {
+                @Override
+                public void run() {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+                    try {
+                        callbackContext.success(decryptUsingFileStream(secureKey, value, iv));
+                    } catch (Exception e) {
+                        Log.d(LOG_TAG, action + e.getMessage());
+                        callbackContext.error("F error ");
+                    }
+                }
+            });
+            return true;
         }
-
         return false;
     }
 
@@ -104,6 +117,8 @@ public class CustomEncryptPlugin extends CordovaPlugin {
 
     private String encryptUsingFileStream(String secureKey, String fileURL, String iv) {
         try {
+            if (!hasWritePermission())
+                getWritePermission(ENC_REQ_CODE);
             byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
                     PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
             IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
@@ -124,6 +139,7 @@ public class CustomEncryptPlugin extends CordovaPlugin {
                 fileOpStream.flush();
             }
             fileOpStream.close();
+            Log.d(LOG_TAG, encryptedFile.getAbsolutePath());
             return encryptedFile.getAbsolutePath();
 
         } catch (Exception e) {
@@ -146,6 +162,8 @@ public class CustomEncryptPlugin extends CordovaPlugin {
 
     private String decryptUsingFileStream(String secureKey, String fileURL, String iv) {
         try {
+            if (!hasWritePermission())
+                getWritePermission(DEC_REQ_CODE);
             byte[] pbkdf2SecuredKey = generatePBKDF2(secureKey.toCharArray(), PBKDF2_SALT.getBytes("UTF-8"),
                     PBKDF2_ITERATION_COUNT, PBKDF2_KEY_LENGTH);
             IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes("UTF-8"));
@@ -175,12 +193,32 @@ public class CustomEncryptPlugin extends CordovaPlugin {
     }
 
     private boolean hasWritePermission() {
-        return PermissionHelper.hasPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        return cordova.hasPermission(WRITE);
     }
 
-    private void getWritePermission(String rawArgs, int action, CallbackContext callbackContext) {
-        int requestCode = pendingRequests.createRequest(rawArgs, action, callbackContext);
-        PermissionHelper.requestPermission(this, requestCode, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+    private void getWritePermission(int requestCode) {
+        cordova.requestPermission(this, requestCode, WRITE);
+    }
+
+    @Override
+    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults)
+            throws JSONException {
+        for (int r : grantResults) {
+            if (r == PackageManager.PERMISSION_DENIED) {
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, PERMISSION_DENIED_ERROR));
+                return;
+            }
+        }
+        switch (requestCode) {
+            case ENC_REQ_CODE:
+                encryptUsingFileStream(secureKey, value, iv);
+                break;
+            case DEC_REQ_CODE:
+                decryptUsingFileStream(secureKey, value, iv);
+                break;
+            default:
+                Log.e(LOG_TAG, "request code not found");
+        }
     }
 
     /**
